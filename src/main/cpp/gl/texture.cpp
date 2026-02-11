@@ -16,13 +16,9 @@
 
 #include "../gles/gles.h"
 #include "../gles/loader.h"
-#include "../includes.h"
-#include "FSR1/FSR1.h"
 #include "framebuffer.h"
-#include "glsl/glsl_for_es.h"
 #include "log.h"
 #include "mg.h"
-#include "pixel.h"
 #include <GL/gl.h>
 #include <ankerl/unordered_dense.h>
 
@@ -148,7 +144,7 @@ TextureTarget ConvertGLEnumToTextureTarget(GLenum target) {
     case GL_TEXTURE_BUFFER:
         return TextureTarget::TEXTURE_BUFFER;
     default:
-        return TextureTarget::TEXTURE_2D;
+        return TextureTarget::UNKNWON;
     }
 }
 
@@ -490,6 +486,17 @@ void glTexParameterf(GLenum target, GLenum pname, GLfloat param) {
     CHECK_GL_ERROR
 }
 
+#define GET_TEXTURE_OBJECT(target)                                                                                     \
+    unsigned __currentUnitIndex = GetCurrentTextureUnitIndex();                                                        \
+    auto& __currentUnit = GetTextureUnit(__currentUnitIndex);                                                          \
+    auto targetR = ConvertGLEnumToTextureTarget(target);                                                               \
+    if (targetR == TextureTarget::UNKNWON) {                                                                           \
+        LOG_E("%s: Unknown texture target: %s", __func__, glEnumToString(target))                                      \
+        return;                                                                                                        \
+    }                                                                                                                  \
+    auto& __bindingSlot = __currentUnit.GetBindingSlot(targetR);                                                       \
+    auto tex = __bindingSlot.GetBoundObject()
+
 void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei width, GLint border, GLenum format,
                   GLenum type, const GLvoid* pixels) {
     LOG()
@@ -508,8 +515,7 @@ void glTexImage1D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
         return;
     }
 
-    int currentUnitIndex = GetCurrentTextureUnitIndex();
-    auto tex = GetTextureUnit(currentUnitIndex).GetBindingSlot(ConvertGLEnumToTextureTarget(target)).GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->depth = 1;
     tex->format = format;
@@ -549,9 +555,7 @@ void glTexImage2D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
         return;
     }
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -618,9 +622,7 @@ void glTexImage3D(GLenum target, GLint level, GLint internalFormat, GLsizei widt
 
     GLES.glTexImage3D(target, level, internalFormat, width, height, depth, border, format, type, pixels);
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -641,9 +643,7 @@ void glTexStorage1D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
           width)
     internal_convert(&internalFormat, nullptr, nullptr);
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -666,9 +666,7 @@ void glTexStorage2D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
     internal_convert(&internalFormat, nullptr, nullptr);
     GLES.glTexStorage2D(target, levels, internalFormat, width, height);
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -694,9 +692,7 @@ void glTexStorage3D(GLenum target, GLsizei levels, GLenum internalFormat, GLsize
 
     GLES.glTexStorage3D(target, levels, internalFormat, width, height, depth);
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -718,9 +714,7 @@ void glCopyTexImage1D(GLenum target, GLint level, GLenum internalFormat, GLint x
           "y: %d, width: %d, border: %d",
           target, level, internalFormat, x, y, width, border)
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -818,9 +812,7 @@ void glCopyTexImage2D(GLenum target, GLint level, GLenum internalFormat, GLint x
         CHECK_GL_ERROR_NO_INIT
     }
 
-    auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                   .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                   .GetBoundObject();
+    GET_TEXTURE_OBJECT(target);
     tex->target = ConvertGLEnumToTextureTarget(target);
     tex->internal_format = internalFormat;
     tex->width = width;
@@ -907,20 +899,22 @@ void glRenderbufferStorageMultisample(GLenum target, GLsizei samples, GLenum int
 void glGetTexLevelParameterfv(GLenum target, GLint level, GLenum pname, GLfloat* params) {
     LOG()
     LOG_D("glGetTexLevelParameterfv,target: %d, level: %d, pname: %d", target, level, pname)
-    GLenum rtarget = map_tex_target(target);
-    if (rtarget == GL_PROXY_TEXTURE_2D) {
-        switch (pname) {
-        case GL_TEXTURE_WIDTH:
-            (*params) = (float)nlevel(gl_state->proxy_width, level);
-            return;
-        case GL_TEXTURE_HEIGHT:
-            (*params) = (float)nlevel(gl_state->proxy_height, level);
-            return;
-        case GL_TEXTURE_INTERNAL_FORMAT:
-            (*params) = (float)gl_state->proxy_intformat;
-            return;
-        default:
-            return;
+    if (gl_state) {
+        GLenum rtarget = map_tex_target(target);
+        if (rtarget == GL_PROXY_TEXTURE_2D) {
+            switch (pname) {
+            case GL_TEXTURE_WIDTH:
+                (*params) = (float)nlevel(gl_state->proxy_width, level);
+                return;
+            case GL_TEXTURE_HEIGHT:
+                (*params) = (float)nlevel(gl_state->proxy_height, level);
+                return;
+            case GL_TEXTURE_INTERNAL_FORMAT:
+                (*params) = (float)gl_state->proxy_intformat;
+                return;
+            default:
+                return;
+            }
         }
     }
     GLES.glGetTexLevelParameterfv(target, level, pname, params);
@@ -931,20 +925,22 @@ void glGetTexLevelParameteriv(GLenum target, GLint level, GLenum pname, GLint* p
     LOG()
     LOG_D("glGetTexLevelParameteriv,target: %s, level: %d, pname: %s", glEnumToString(target), level,
           glEnumToString(pname))
-    GLenum rtarget = map_tex_target(target);
-    if (rtarget == GL_PROXY_TEXTURE_2D) {
-        switch (pname) {
-        case GL_TEXTURE_WIDTH:
-            (*params) = nlevel(gl_state->proxy_width, level);
-            return;
-        case GL_TEXTURE_HEIGHT:
-            (*params) = nlevel(gl_state->proxy_height, level);
-            return;
-        case GL_TEXTURE_INTERNAL_FORMAT:
-            (*params) = (GLint)gl_state->proxy_intformat;
-            return;
-        default:
-            return;
+    if (gl_state) {
+        GLenum rtarget = map_tex_target(target);
+        if (rtarget == GL_PROXY_TEXTURE_2D) {
+            switch (pname) {
+            case GL_TEXTURE_WIDTH:
+                (*params) = nlevel(gl_state->proxy_width, level);
+                return;
+            case GL_TEXTURE_HEIGHT:
+                (*params) = nlevel(gl_state->proxy_height, level);
+                return;
+            case GL_TEXTURE_INTERNAL_FORMAT:
+                (*params) = (GLint)gl_state->proxy_intformat;
+                return;
+            default:
+                return;
+            }
         }
     }
     LOG_D("es.glGetTexLevelParameteriv,target: %s, level: %d, pname: %s", glEnumToString(target), level,
@@ -954,8 +950,8 @@ void glGetTexLevelParameteriv(GLenum target, GLint level, GLenum pname, GLint* p
 }
 
 void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
-    LOG_D("glTexParameteriv, target: %s, pname: %s, params[0]: %s", params, glEnumToString(pname),
-          params ? glEnumToString(params[0]) : "0")
+    LOG()
+    LOG_D("glTexParameteriv, target: %s, pname: %s", glEnumToString(target), glEnumToString(pname))
 
     if (pname == GL_TEXTURE_SWIZZLE_RGBA) {
         LOG_D("find GL_TEXTURE_SWIZZLE_RGBA, now use glTexParameteri")
@@ -967,9 +963,7 @@ void glTexParameteriv(GLenum target, GLenum pname, const GLint* params) {
             GLES.glTexParameteri(target, GL_TEXTURE_SWIZZLE_A, params[3]);
 
             // save states for now
-            auto tex = GetTextureUnit(GetCurrentTextureUnitIndex())
-                           .GetBindingSlot(ConvertGLEnumToTextureTarget(target))
-                           .GetBoundObject();
+            GET_TEXTURE_OBJECT(target);
             tex->swizzle_param[0] = params[0];
             tex->swizzle_param[1] = params[1];
             tex->swizzle_param[2] = params[2];
@@ -1007,7 +1001,8 @@ void glBindTexture(GLenum target, GLuint texture) {
     LOG()
     LOG_D("glBindTexture(%s, %d)", glEnumToString(target), texture)
     INIT_CHECK_GL_ERROR
-    if (hardware->emulate_texture_buffer && target == GL_TEXTURE_BUFFER) {
+
+    if (hardware && gl_state && hardware->emulate_texture_buffer && target == GL_TEXTURE_BUFFER) {
         GLES.glActiveTexture(GL_TEXTURE0 + 15);
         GLES.glBindTexture(GL_TEXTURE_2D, texture);
         GLES.glActiveTexture(GL_TEXTURE0 + gl_state->current_tex_unit);
@@ -1018,9 +1013,19 @@ void glBindTexture(GLenum target, GLuint texture) {
 
     int currentUnitIndex = GetCurrentTextureUnitIndex();
     auto& currentUnit = GetTextureUnit(currentUnitIndex);
-    auto& bindingSlot = currentUnit.GetBindingSlot(ConvertGLEnumToTextureTarget(target));
+    auto targetR = ConvertGLEnumToTextureTarget(target);
+    if (targetR == TextureTarget::UNKNWON) {
+        LOG_E("glBindTexture: Unknown texture target: %s", glEnumToString(target));
+        return;
+    }
+    auto& bindingSlot = currentUnit.GetBindingSlot(targetR);
     auto textureObject = GetOrCreateTextureObject(texture);
+    if (!textureObject) {
+        LOG_W("glBindTexture: Failed to get or create texture object for ID %d, it may be not tracked", texture);
+        return;
+    }
     bindingSlot.Bind(textureObject);
+    textureObject->target = targetR;
 }
 
 void glDeleteTextures(GLsizei n, const GLuint* textures) {
@@ -1037,7 +1042,7 @@ void glDeleteTextures(GLsizei n, const GLuint* textures) {
 void glActiveTexture(GLenum texture) {
     LOG()
     LOG_D("glActiveTexture, texture = %s", glEnumToString(texture))
-    if (texture < GL_TEXTURE0) {
+    if (texture < GL_TEXTURE0 || texture >= GL_TEXTURE0 + MAX_TEXTURE_IMAGE_UNITS) {
         LOG_E("Invalid texture enum: %s", glEnumToString(texture))
         return;
     }
@@ -1049,8 +1054,11 @@ void glActiveTexture(GLenum texture) {
 }
 
 void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void* pixels) {
-    GLint prevFBO;
-    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevFBO);
+    LOG()
+    LOG_D("glGetTexImage, target: 0x%x, level: %d, format: 0x%x, type: 0x%x, pixels: 0x%x", target, level, format, type,
+          pixels)
+    GLint prevDrawFBO;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &prevDrawFBO);
     GLint prevReadFBO;
     glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &prevReadFBO);
 
@@ -1066,7 +1074,8 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
         textureBindingTarget = GL_TEXTURE_BINDING_2D;
     } else {
         LOG_E("glGetTexImage: Unsupported or complex target: 0x%x", target)
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
         return;
     }
@@ -1074,7 +1083,8 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     if (textureId == 0) {
         LOG_E("glGetTexImage: No texture bound to the specified target.")
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
         return;
     }
@@ -1085,7 +1095,8 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     if (width == 0 || height == 0) {
         LOG_E("glGetTexImage: Texture level %d has zero width or height.", level)
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
         return;
     }
@@ -1099,7 +1110,8 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
     GLenum fboStatus = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (fboStatus != GL_FRAMEBUFFER_COMPLETE) {
         LOG_E("glGetTexImage: Failed to create complete framebuffer. Status: 0x%x", fboStatus)
-        glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &tempFBO);
         return;
     }
@@ -1108,7 +1120,8 @@ void glGetTexImage(GLenum target, GLint level, GLenum format, GLenum type, void*
 
     glReadPixels(0, 0, width, height, format, type, pixels);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, prevFBO);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
     glDeleteFramebuffers(1, &tempFBO);
 }
 
@@ -1168,7 +1181,9 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
     LOG()
     LOG_D("glClearTexImage, texture: %d, level: %d, format: %d, type: %d", texture, level, format, type)
     INIT_CHECK_GL_ERROR_FORCE
-    GLuint fbo;
+    GLuint fbo, prevDrawFBO, prevReadFBO;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, (int*)&prevDrawFBO);
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, (int*)&prevReadFBO);
     glGenFramebuffers(1, &fbo);
     glBindFramebuffer(GL_FRAMEBUFFER, fbo);
     CHECK_GL_ERROR_NO_INIT
@@ -1178,7 +1193,8 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
     CHECK_GL_ERROR_NO_INIT
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
         LOG_D("  -> exit")
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
         glDeleteFramebuffers(1, &fbo);
         CHECK_GL_ERROR_NO_INIT
         return;
@@ -1221,8 +1237,8 @@ void glClearTexImage(GLuint texture, GLint level, GLenum format, GLenum type, co
         GLES.glClear(GL_COLOR_BUFFER_BIT);
         CHECK_GL_ERROR_NO_INIT
     }
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, prevReadFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, prevDrawFBO);
     glDeleteFramebuffers(1, &fbo);
     CHECK_GL_ERROR_NO_INIT
 }
