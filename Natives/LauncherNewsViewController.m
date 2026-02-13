@@ -28,7 +28,7 @@ UIEdgeInsets insets;
     CGSize size = CGSizeMake(self.view.frame.size.width, self.view.frame.size.height);
     insets = UIApplication.sharedApplication.windows.firstObject.safeAreaInsets;
     
-    NSString *newsURL = getPrefObject(@"general.news_url") ?: @"https://amethyst.ct.ws/welcome";
+    NSString *newsURL = getPrefObject(@"general.news_url") ?: @"https://wiki.angelauramc.dev/patchnotes/changelogs/IOS.html";
     NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:newsURL]];
 
     WKWebViewConfiguration *webConfig = [[WKWebViewConfiguration alloc] init];
