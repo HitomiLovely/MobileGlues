@@ -122,7 +122,7 @@ METHOD_DIRCHECK   = \
 	else \
 		rm -rf $(1)/*; \
 	fi
-	
+
 # Function to change the platform on Mach-O files.
 # iOS = 2, tvOS = 3, iOS Simulator = 7, tvOS Simulator = 8, visionOS = 11, visionOS Simulator = 12
 # https://github.com/apple-oss-distributions/xnu/blob/main/EXTERNAL_HEADERS/mach-o/loader.h
@@ -134,7 +134,7 @@ METHOD_CHANGE_PLAT = \
 	else \
 		vtool -arch arm64 -set-build-version $(1) 1.0 1.0 -replace -output $(2) $(2); \
 	fi \
-	
+
 # Function to package the application
 METHOD_PACKAGE = \
 	if [ '$(TROLLSTORE_JIT_ENT)' == '1' ]; then \
@@ -296,25 +296,22 @@ jre: native
 	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-21-openjdk/lib
 	echo '[Amethyst v$(VERSION)] jre - end'
 
-# MobileGlues artifact ID (workflow_run id: 22014226012, artifact id: 5510020012)
-MG_ARTIFACT_ID ?= 5510020012
-
 dep_mg:
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
 	cd $(WORKINGDIR)/mobileglues && cmake \
-    		-DMACOS="1" \
-    		-DCMAKE_CROSSCOMPILING=true \
-    		-DCMAKE_SYSTEM_NAME=Darwin \
-    		-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-    		-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
-    		-DCMAKE_OSX_ARCHITECTURES=arm64 \
-    		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
-    		-DCMAKE_C_FLAGS="-arch arm64" \
-    		$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/
+		-DMACOS="1" \
+		-DCMAKE_CROSSCOMPILING=true \
+		-DCMAKE_SYSTEM_NAME=Darwin \
+		-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+		-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
+		-DCMAKE_OSX_ARCHITECTURES=arm64 \
+		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+		-DCMAKE_C_FLAGS="-arch arm64" \
+		$(SOURCEDIR)/Natives/external/MobileGlues/MobileGlues-cpp/
 
-    	cmake --build $(WORKINGDIR)/mobileglues --config RelWithDebInfo -j$(JOBS) --target mobileglues
-    	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
+	cmake --build $(WORKINGDIR)/mobileglues --config RelWithDebInfo -j$(JOBS) --target mobileglues
+	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
 assets:
@@ -416,14 +413,14 @@ package: payload
 	$(call METHOD_PACKAGE); \
 	zip --symlinks -r $(OUTPUTDIR)/java_runtimes.zip java_runtimes; \
 	echo '[Amethyst v$(VERSION)] package - end'
-	
+
 dsym: payload
 	echo '[Amethyst v$(VERSION)] dsym - start'
 	dsymutil --arch arm64 $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/AngelAuraAmethyst; \
 	rm -rf $(OUTPUTDIR)/AngelAuraAmethyst.dSYM; \
 	mv $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/AngelAuraAmethyst.dSYM $(OUTPUTDIR)/AngelAuraAmethyst.dSYM
 	echo '[Amethyst v$(VERSION)] dsym - end'
-	
+
 codesign:
 	echo '[Amethyst v$(VERSION)] codesign - start'
 	cp '$(PROVISIONING)' $(OUTPUTDIR)/Payload/AngelAuraAmethyst.app/embedded.mobileprovision
@@ -438,6 +435,6 @@ clean:
 	rm -rf $(OUTPUTDIR)
 	echo '[Amethyst v$(VERSION)] clean - end'
 
-		
+
 
 .PHONY: all clean check native java jre package dsym deploy help
